@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { loadSettings, saveSettings } from '@/lib/settings';
+import { pollingService } from '@/lib/polling-service';
 import { AppSettings } from '@/types';
 
 // GET - Load settings
@@ -53,9 +54,23 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    // Polling service'e ayarları yeniden yüklemesini söyle
+    pollingService.reloadSettings();
+
+    // Eğer servis çalışıyorsa, yeniden başlat
+    const status = pollingService.getStatus();
+    if (status.isRunning) {
+      await pollingService.stop();
+      // Kısa bir bekleme sonrası yeniden başlat
+      setTimeout(async () => {
+        await pollingService.start();
+      }, 1000);
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Ayarlar başarıyla kaydedildi',
+      needsRestart: status.isRunning,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Bilinmeyen hata';

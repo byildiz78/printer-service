@@ -204,15 +204,23 @@ export default function Dashboard() {
       const data = await response.json();
 
       if (data.success) {
-        alert('Ayarlar başarıyla kaydedildi! Servis yeniden başlatılıyor...');
         setSettings(settingsForm);
         setShowSettingsModal(false);
 
-        // Servisi durdur ve yeniden başlat
-        await stopService();
-        setTimeout(async () => {
-          await startService();
-        }, 1000);
+        // Eğer servis çalışıyordu, yeniden başlatıldı
+        if (data.needsRestart) {
+          alert('Ayarlar başarıyla kaydedildi! Servis yeniden başlatılıyor...');
+          setTimeout(() => {
+            fetchStatus();
+          }, 2000);
+        } else {
+          // İlk kez ayarlandı, servisi başlat
+          alert('Ayarlar başarıyla kaydedildi! Servis başlatılıyor...');
+          setTimeout(async () => {
+            await startService();
+            await fetchStatus();
+          }, 1000);
+        }
       } else {
         alert('Ayarlar kaydedilemedi: ' + data.error);
       }
