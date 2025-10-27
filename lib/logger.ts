@@ -66,5 +66,13 @@ class Logger {
   }
 }
 
-// Singleton instance
-export const logger = new Logger();
+// Global singleton instance
+declare global {
+  var __logger: Logger | undefined;
+}
+
+if (!globalThis.__logger) {
+  globalThis.__logger = new Logger();
+}
+
+export const logger = globalThis.__logger;

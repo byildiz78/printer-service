@@ -341,5 +341,13 @@ class PollingService {
   }
 }
 
-// Singleton instance
-export const pollingService = new PollingService();
+// Global singleton instance
+declare global {
+  var __pollingService: PollingService | undefined;
+}
+
+if (!globalThis.__pollingService) {
+  globalThis.__pollingService = new PollingService();
+}
+
+export const pollingService = globalThis.__pollingService;

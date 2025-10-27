@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react';
 import { ServiceStatus, LogEntry, AppSettings } from '@/types';
 import {
-  Play,
-  Square,
   Printer,
   CheckCircle2,
   XCircle,
@@ -100,7 +98,7 @@ export default function Dashboard() {
     }
   };
 
-  // Start service
+  // Start service (used only when saving settings for the first time)
   const startService = async () => {
     try {
       const response = await fetch('/api/service/start', { method: 'POST' });
@@ -113,21 +111,6 @@ export default function Dashboard() {
       }
     } catch (error) {
       alert('Servis başlatma hatası: ' + error);
-    }
-  };
-
-  // Stop service
-  const stopService = async () => {
-    try {
-      const response = await fetch('/api/service/stop', { method: 'POST' });
-      const data = await response.json();
-      if (data.success) {
-        await fetchStatus();
-      } else {
-        alert('Servis durdurulamadı: ' + data.error);
-      }
-    } catch (error) {
-      alert('Servis durdurma hatası: ' + error);
     }
   };
 
@@ -479,14 +462,14 @@ export default function Dashboard() {
                   <div className="absolute inset-0 w-4 h-4 bg-green-500 rounded-full animate-ping"></div>
                 </div>
               ) : (
-                <div className="w-4 h-4 bg-red-500 rounded-full"></div>
+                <div className="w-4 h-4 bg-yellow-500 rounded-full"></div>
               )}
               <div>
                 <h2 className="text-xl md:text-2xl font-bold text-gray-900">
-                  {status?.isRunning ? 'Servis Aktif' : 'Servis Durmuş'}
+                  {status?.isRunning ? 'Servis Aktif' : 'Servis Hazırlanıyor'}
                 </h2>
                 <p className="text-gray-600 text-xs">
-                  {status?.isRunning ? 'Çalışıyor ve görevleri işliyor' : 'Beklemede'}
+                  {status?.isRunning ? 'Çalışıyor ve görevleri işliyor' : 'Otomatik başlatılıyor...'}
                 </p>
               </div>
             </div>
@@ -498,23 +481,6 @@ export default function Dashboard() {
                 <TestTube2 className="w-4 h-4" />
                 Test
               </button>
-              {!status?.isRunning ? (
-                <button
-                  onClick={startService}
-                  className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 shadow-lg hover:shadow-green-500/50 transform hover:scale-105"
-                >
-                  <Play className="w-4 h-4" />
-                  Başlat
-                </button>
-              ) : (
-                <button
-                  onClick={stopService}
-                  className="flex items-center gap-2 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 shadow-lg hover:shadow-red-500/50 transform hover:scale-105"
-                >
-                  <Square className="w-4 h-4" />
-                  Durdur
-                </button>
-              )}
             </div>
           </div>
         </div>
