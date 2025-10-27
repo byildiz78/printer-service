@@ -25,12 +25,34 @@ class PollingService {
     lastError: null,
   };
 
-  private apiUrl = process.env.PRINTER_API_URL
-    ? `${process.env.PRINTER_API_URL}?status=0&limit=10`
-    : 'http://localhost:3000/api/printer/templateJob?status=0&limit=10';
-  private updateApiUrl = process.env.PRINTER_API_URL || 'http://localhost:3000/api/printer/templateJob';
+  private apiUrl = '';
+  private updateApiUrl = '';
   private pollInterval = 1000; // 1 saniye
   private maxRetries = 5; // Maksimum deneme sayısı
+
+  constructor() {
+    this.loadSettingsAndUpdateUrls();
+  }
+
+  private loadSettingsAndUpdateUrls() {
+    // Try to load from settings.json first, fallback to env
+    try {
+      const { loadSettings } = require('./settings');
+      const settings = loadSettings();
+
+      const baseUrl = settings.PRINTER_API_URL || process.env.PRINTER_API_URL || 'http://localhost:3000';
+      const fullUrl = `${baseUrl}/api/printer/templateJob`;
+
+      this.apiUrl = `${fullUrl}?status=0&limit=10`;
+      this.updateApiUrl = fullUrl;
+    } catch (error) {
+      // Fallback to env or default
+      const baseUrl = process.env.PRINTER_API_URL || 'http://localhost:3000';
+      const fullUrl = `${baseUrl}/api/printer/templateJob`;
+      this.apiUrl = `${fullUrl}?status=0&limit=10`;
+      this.updateApiUrl = fullUrl;
+    }
+  }
 
   async start() {
     if (this.isRunning) {
@@ -311,6 +333,11 @@ class PollingService {
         this.start();
       });
     }
+  }
+
+  reloadSettings() {
+    this.loadSettingsAndUpdateUrls();
+    logger.info('Ayarlar yeniden yüklendi');
   }
 }
 

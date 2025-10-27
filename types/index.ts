@@ -64,3 +64,10 @@ export interface PrintResult {
   jobId: number;
   error?: string;
 }
+
+// Settings Types
+export interface AppSettings {
+  PRINTER_API_URL: string;
+  PRINTER_IP: string;
+  PRINTER_PORT: number;
+}

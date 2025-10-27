@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ServiceStatus, LogEntry } from '@/types';
+import { ServiceStatus, LogEntry, AppSettings } from '@/types';
 import {
   Play,
   Square,
@@ -18,6 +18,7 @@ import {
   ChevronUp,
   X,
   TestTube2,
+  Settings,
 } from 'lucide-react';
 
 interface JobGroup {
@@ -41,6 +42,18 @@ export default function Dashboard() {
   const [testPort, setTestPort] = useState('');
   const [testPrinterType, setTestPrinterType] = useState<'thermal' | 'slip'>('thermal');
   const [isTesting, setIsTesting] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settings, setSettings] = useState<AppSettings>({
+    PRINTER_API_URL: '',
+    PRINTER_IP: '',
+    PRINTER_PORT: 9100,
+  });
+  const [settingsForm, setSettingsForm] = useState<AppSettings>({
+    PRINTER_API_URL: '',
+    PRINTER_IP: '',
+    PRINTER_PORT: 9100,
+  });
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   // Fetch service status
   const fetchStatus = async () => {
@@ -65,6 +78,25 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error('Logs fetch error:', error);
+    }
+  };
+
+  // Fetch settings
+  const fetchSettings = async () => {
+    try {
+      const response = await fetch('/api/settings');
+      const data = await response.json();
+      if (data.success) {
+        setSettings(data.data);
+        setSettingsForm(data.data);
+
+        // Eğer PRINTER_API_URL boşsa modal'ı aç
+        if (!data.data.PRINTER_API_URL || data.data.PRINTER_API_URL.trim() === '') {
+          setShowSettingsModal(true);
+        }
+      }
+    } catch (error) {
+      console.error('Settings fetch error:', error);
     }
   };
 
@@ -152,9 +184,49 @@ export default function Dashboard() {
     }
   };
 
+  // Save settings
+  const saveSettings = async () => {
+    if (!settingsForm.PRINTER_API_URL || !settingsForm.PRINTER_IP || !settingsForm.PRINTER_PORT) {
+      alert('Tüm alanları doldurun');
+      return;
+    }
+
+    setIsSavingSettings(true);
+    try {
+      const response = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(settingsForm),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert('Ayarlar başarıyla kaydedildi! Servis yeniden başlatılıyor...');
+        setSettings(settingsForm);
+        setShowSettingsModal(false);
+
+        // Servisi durdur ve yeniden başlat
+        await stopService();
+        setTimeout(async () => {
+          await startService();
+        }, 1000);
+      } else {
+        alert('Ayarlar kaydedilemedi: ' + data.error);
+      }
+    } catch (error) {
+      alert('Ayar kaydetme hatası: ' + error);
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
   // Initial fetch
   useEffect(() => {
     const init = async () => {
+      await fetchSettings();
       await fetchStatus();
       await fetchLogs();
       setIsLoading(false);
@@ -362,17 +434,31 @@ export default function Dashboard() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-4 text-center md:text-left">
-          <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
-            <div className="p-2 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg shadow-lg">
-              <Printer className="w-5 h-5 text-white" />
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg shadow-lg">
+                <Printer className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  robotPOS Air Print Service
+                </h1>
+                <p className="text-gray-600 text-sm">
+                  Termal & Slip Yazıcı Otomasyonu - Gerçek Zamanlı İzleme
+                </p>
+              </div>
             </div>
-            <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-              robotPOS Air Print Service
-            </h1>
+            <button
+              onClick={() => {
+                setSettingsForm(settings);
+                setShowSettingsModal(true);
+              }}
+              className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
+              title="Ayarlar"
+            >
+              <Settings className="w-5 h-5 text-gray-700" />
+            </button>
           </div>
-          <p className="text-gray-600 text-sm">
-            Termal & Slip Yazıcı Otomasyonu - Gerçek Zamanlı İzleme
-          </p>
         </div>
 
         {/* Status Header Card */}
@@ -696,6 +782,116 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+
+        {/* Settings Modal */}
+        {showSettingsModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 relative animate-in fade-in zoom-in duration-200">
+              {/* Close Button - Only if settings are configured */}
+              {settings.PRINTER_API_URL && (
+                <button
+                  onClick={() => setShowSettingsModal(false)}
+                  className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+
+              {/* Header */}
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg">
+                  <Settings className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Uygulama Ayarları</h2>
+                  <p className="text-xs text-gray-600">
+                    {settings.PRINTER_API_URL ? 'Ayarları düzenleyin' : 'Lütfen ayarları yapılandırın'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Form */}
+              <div className="space-y-4">
+                {/* API URL Input */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    API URL <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={settingsForm.PRINTER_API_URL}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, PRINTER_API_URL: e.target.value })
+                    }
+                    placeholder="https://dev.robotpos.com"
+                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Sadece base URL girin (örn: https://dev.robotpos.com)
+                  </p>
+                </div>
+
+                {/* Printer IP Input */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Varsayılan Yazıcı IP <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={settingsForm.PRINTER_IP}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, PRINTER_IP: e.target.value })}
+                    placeholder="192.168.2.214"
+                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
+                  />
+                </div>
+
+                {/* Printer Port Input */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Varsayılan Yazıcı Port <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={settingsForm.PRINTER_PORT}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, PRINTER_PORT: parseInt(e.target.value) })
+                    }
+                    placeholder="9100"
+                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
+                  />
+                </div>
+
+                {/* Warning if not configured */}
+                {!settings.PRINTER_API_URL && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <p className="text-xs text-yellow-800">
+                      <strong>Uyarı:</strong> Servis başlatılabilmesi için API URL gereklidir.
+                    </p>
+                  </div>
+                )}
+
+                {/* Buttons */}
+                <div className="flex gap-3 pt-2">
+                  {settings.PRINTER_API_URL && (
+                    <button
+                      onClick={() => setShowSettingsModal(false)}
+                      className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2.5 rounded-lg font-semibold text-sm transition-all"
+                    >
+                      İptal
+                    </button>
+                  )}
+                  <button
+                    onClick={saveSettings}
+                    disabled={isSavingSettings}
+                    className="flex-1 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white px-4 py-2.5 rounded-lg font-semibold text-sm transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSavingSettings ? 'Kaydediliyor...' : 'Kaydet'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Test Printer Modal */}
         {showTestModal && (
