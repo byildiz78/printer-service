@@ -1,5 +1,6 @@
 import { logger } from './logger';
 import { printerService } from './printer';
+import * as printerRouter from './printer-router';
 import { htmlRenderer } from './renderer';
 import { PrinterJobResponse, ServiceStatus, PrinterJob } from '@/types';
 
@@ -128,8 +129,8 @@ class PollingService {
     try {
       this.status.lastPollTime = new Date().toISOString();
 
-      // API'ye sorgu yap
-      logger.info(`API sorgulanıyor: ${this.apiUrl}`);
+      // API'ye sorgu yap (log çok fazla output üretiyor, yoruma alındı)
+      // logger.info(`API sorgulanıyor: ${this.apiUrl}`);
       const response = await fetch(this.apiUrl, {
         method: 'GET',
         headers: {
@@ -211,7 +212,8 @@ class PollingService {
             `Job yazdırılıyor: ID=${jobId}, Deneme=${retryInfo.attempts}/${this.maxRetries}`
           );
 
-          const result = await printerService.printJob(job);
+          // Yazıcı tipine göre doğru akışa yönlendir (slip veya termal)
+          const result = await printerRouter.printJob(job);
 
           if (result.success) {
             // Başarılı - API'ye bildir
