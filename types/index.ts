@@ -6,6 +6,7 @@ export interface PrinterJob {
   ReferenceNumber: string;
   Content: string;
   PrinterName: string;
+  AltPrinterName?: string; // IP:PORT formatında (örn: "192.168.2.173:9101")
   AddDateTime: string;
   ProcessDateTime: string | null;
   ExternalNotes: string;

@@ -10,7 +10,10 @@ class PrinterService {
   private printerPort: number;
   private tempDir: string;
 
-  constructor(ip: string = '192.168.2.214', port: number = 9100) {
+  constructor(
+    ip: string = process.env.PRINTER_IP || '192.168.2.214',
+    port: number = parseInt(process.env.PRINTER_PORT || '9100')
+  ) {
     this.printerIp = ip;
     this.printerPort = port;
 
@@ -22,11 +25,52 @@ class PrinterService {
     }
   }
 
+  private parsePrinterAddress(address: string): { ip: string; port: number } | null {
+    try {
+      // Format: "192.168.2.173:9101"
+      const parts = address.split(':');
+      if (parts.length !== 2) {
+        return null;
+      }
+
+      const ip = parts[0].trim();
+      const port = parseInt(parts[1].trim());
+
+      if (!ip || isNaN(port)) {
+        return null;
+      }
+
+      return { ip, port };
+    } catch (error) {
+      logger.error('Printer address parse hatası', error);
+      return null;
+    }
+  }
+
   async printJob(job: PrinterJob): Promise<PrintResult> {
     let tempFilePath: string | null = null;
 
     try {
       logger.info(`Print job başlatıldı: ID=${job.AutoID}, Ref=${job.ReferenceNumber}`);
+
+      // Yazıcı IP ve Port'u belirle (AltPrinterName'den veya env'den)
+      let printerIp = this.printerIp;
+      let printerPort = this.printerPort;
+
+      logger.info(`Job bilgisi: PrinterName="${job.PrinterName}", AltPrinterName="${job.AltPrinterName || 'yok'}"`);
+
+      if (job.AltPrinterName && job.AltPrinterName.trim() !== '') {
+        const parsed = this.parsePrinterAddress(job.AltPrinterName);
+        if (parsed) {
+          printerIp = parsed.ip;
+          printerPort = parsed.port;
+          logger.info(`✅ Job için özel yazıcı kullanılıyor: ${printerIp}:${printerPort} (${job.PrinterName})`);
+        } else {
+          logger.warning(`⚠️ AltPrinterName parse edilemedi: "${job.AltPrinterName}", varsayılan kullanılıyor: ${printerIp}:${printerPort}`);
+        }
+      } else {
+        logger.info(`ℹ️ AltPrinterName yok, varsayılan yazıcı kullanılıyor: ${printerIp}:${printerPort}`);
+      }
 
       // HTML'i görüntüye dönüştür
       const imageBuffer = await htmlRenderer.renderHtmlToImage(job.Content);
@@ -38,11 +82,12 @@ class PrinterService {
       logger.info(`Geçici dosya oluşturuldu: ${tempFilePath}`);
 
       // Yazıcı yapılandırması
+      logger.info(`Yazıcıya bağlanılıyor: ${printerIp}:${printerPort}`);
       const printer = new ThermalPrinter({
         type: PrinterTypes.EPSON,
-        interface: `tcp://${this.printerIp}:${this.printerPort}`,
+        interface: `tcp://${printerIp}:${printerPort}`,
         options: {
-          timeout: 3000, // 3 saniye timeout
+          timeout: 10000, // 10 saniye timeout
         },
       });
 
@@ -60,7 +105,7 @@ class PrinterService {
       printer.clear();
 
       logger.success(
-        `Print job başarılı: ID=${job.AutoID}, Printer=${job.PrinterName}`
+        `Print job başarılı: ID=${job.AutoID}, Printer=${job.PrinterName} → ${printerIp}:${printerPort}`
       );
 
       return {

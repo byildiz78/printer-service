@@ -25,25 +25,25 @@ npm install
 
 ## Yapılandırma
 
-### Yazıcı Ayarları
+### Environment Variables
 
-Yazıcı IP ve port ayarlarını değiştirmek için `lib/printer.ts` dosyasını düzenleyin:
+`.env.local` dosyası oluşturun:
 
-```typescript
-export const printerService = new PrinterService('192.168.2.214', 9100);
+```bash
+# Printer API Configuration
+PRINTER_API_URL=https://dev.robotpos.com/api/printer/templateJob
+PRINTER_IP=192.168.2.214
+PRINTER_PORT=9100
 ```
 
-### API URL
-
-API endpoint'ini değiştirmek için `lib/polling-service.ts` dosyasını düzenleyin:
-
-```typescript
-private apiUrl = 'http://localhost:3000/api/printer/templateJob?status=0&limit=10';
-```
+**Değişkenler:**
+- `PRINTER_API_URL`: Printer job API endpoint (zorunlu değil, varsayılan: localhost:3000)
+- `PRINTER_IP`: Yazıcı IP adresi (varsayılan: 192.168.2.214)
+- `PRINTER_PORT`: Yazıcı port numarası (varsayılan: 9100)
 
 ### Polling Interval
 
-Sorgu aralığını değiştirmek için (ms cinsinden):
+Sorgu aralığını değiştirmek için `lib/polling-service.ts`:
 
 ```typescript
 private pollInterval = 1000; // 1 saniye

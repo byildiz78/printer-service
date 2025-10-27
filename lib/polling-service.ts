@@ -7,6 +7,7 @@ interface JobRetryInfo {
   job: PrinterJob;
   attempts: number;
   lastAttempt: number;
+  consecutiveConnectionFailures: number; // Peş peşe bağlantı hatası sayısı
 }
 
 class PollingService {
@@ -23,8 +24,10 @@ class PollingService {
     lastError: null,
   };
 
-  private apiUrl = 'http://localhost:3000/api/printer/templateJob?status=0&limit=10';
-  private updateApiUrl = 'http://localhost:3000/api/printer/templateJob';
+  private apiUrl = process.env.PRINTER_API_URL
+    ? `${process.env.PRINTER_API_URL}?status=0&limit=10`
+    : 'http://localhost:3000/api/printer/templateJob?status=0&limit=10';
+  private updateApiUrl = process.env.PRINTER_API_URL || 'http://localhost:3000/api/printer/templateJob';
   private pollInterval = 1000; // 1 saniye
   private maxRetries = 5; // Maksimum deneme sayısı
 
@@ -126,7 +129,23 @@ class PollingService {
       this.status.lastPollTime = new Date().toISOString();
 
       // API'ye sorgu yap
-      const response = await fetch(this.apiUrl);
+      logger.info(`API sorgulanıyor: ${this.apiUrl}`);
+      const response = await fetch(this.apiUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // Self-signed certificate hatalarını görmezden gel (development)
+        // @ts-ignore
+        agent: this.apiUrl.startsWith('https') ? undefined : undefined,
+      }).catch((fetchError) => {
+        // Fetch hatası detaylarını logla
+        logger.error(`Fetch hatası detayı: ${fetchError.message}`, {
+          url: this.apiUrl,
+          cause: fetchError.cause,
+        });
+        throw fetchError;
+      });
 
       if (!response.ok) {
         throw new Error(`API hatası: ${response.status} ${response.statusText}`);
@@ -155,6 +174,7 @@ class PollingService {
             job,
             attempts: 0,
             lastAttempt: 0,
+            consecutiveConnectionFailures: 0,
           });
           logger.info(`Yeni job eklendi: ID=${job.AutoID}`);
         }
@@ -196,6 +216,7 @@ class PollingService {
           if (result.success) {
             // Başarılı - API'ye bildir
             this.status.totalJobsProcessed++;
+            retryInfo.consecutiveConnectionFailures = 0; // Reset connection failure counter
 
             const statusUpdated = await this.updateJobStatus(
               jobId,
@@ -213,6 +234,42 @@ class PollingService {
               retryInfo.attempts = this.maxRetries - 1; // Bir sonraki denemede max'a ulaşacak
             }
           } else {
+            // Başarısız - bağlantı hatası mı kontrol et
+            const isConnectionError =
+              result.error?.includes('Socket timeout') ||
+              result.error?.includes('ETIMEDOUT') ||
+              result.error?.includes('ECONNREFUSED') ||
+              result.error?.includes('ECONNRESET') ||
+              result.error?.includes('bağlanılamadı') ||
+              result.error?.includes('timeout');
+
+            if (isConnectionError) {
+              retryInfo.consecutiveConnectionFailures++;
+              logger.warning(
+                `Bağlantı hatası: ID=${jobId}, Peş peşe=${retryInfo.consecutiveConnectionFailures}/5, Hata: ${result.error}`
+              );
+
+              // 5 peş peşe bağlantı hatası - vazgeç ve sıradakine geç
+              if (retryInfo.consecutiveConnectionFailures >= 5) {
+                logger.error(
+                  `Job ID=${jobId} 5 kez bağlantı hatası aldı, vazgeçiliyor`
+                );
+
+                await this.updateJobStatus(
+                  jobId,
+                  2,
+                  `5 kez bağlantı hatası, yazıcıya ulaşılamadı - ${new Date().toLocaleString('tr-TR')}`
+                );
+
+                this.status.totalJobsFailed++;
+                this.activeJobs.delete(jobId);
+                continue;
+              }
+            } else {
+              // Farklı tip hata - connection failure counter'ı sıfırla
+              retryInfo.consecutiveConnectionFailures = 0;
+            }
+
             // Başarısız - retry için listede tut
             this.status.lastError = result.error || 'Bilinmeyen hata';
             logger.warning(
